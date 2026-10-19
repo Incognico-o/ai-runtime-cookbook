@@ -7,6 +7,7 @@ mlflow_run_name: kumo-anomaly-finetune
 
 environment:
   version: '6'
+  dependencies: []
 
 compute:
   accelerator_type: GPU_1xA10

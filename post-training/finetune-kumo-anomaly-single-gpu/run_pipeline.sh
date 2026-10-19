@@ -29,14 +29,31 @@ uv run --frozen --no-dev python "$CODE_SOURCE_PATH/prepare_data.py" \
     --val-rows "$VAL_ROWS" \
     2>&1 | tee "$WORK_DIR/data_preparation.log"
 
-# Fine-tune once. The upstream script downloads the pretrained assets from
-# nvidia/Kumo-Anomaly (validated with Hugging Face revision 226c500).
+# Pre-download the pinned pretrained weights and config from nvidia/Kumo-Anomaly.
+# Pinning the Hugging Face revision keeps the fine-tuning inputs reproducible, so
+# training uses the exact validated assets and not the repo's default branch.
+WEIGHTS_REVISION=226c5003b0582adc1cac433123f47324bfae39f2
 mkdir -p "$WORK_DIR/weights" "$WORK_DIR/checkpoints"
+uv run --frozen --no-dev python - \
+    "$WORK_DIR/weights/final_model.pth" \
+    "$WORK_DIR/weights/curriculum_medium.yaml" \
+    "$WEIGHTS_REVISION" <<'PY'
+import sys
+
+from sdk.inference_ad import download_model_weights
+
+model_path, config_path, revision = sys.argv[1:4]
+download_model_weights(model_path=model_path, config_path=config_path, revision=revision)
+PY
+
+# Fine-tune once against the pinned assets. --no-download makes training fail if a
+# pinned file is missing, instead of silently fetching the HF default branch.
 uv run --frozen --no-dev python examples/finetune_example.py \
     --csv "$WORK_DIR/data/train.csv" \
     --val-csv "$WORK_DIR/data/normal_val.csv" \
     --pretrained-model "$WORK_DIR/weights/final_model.pth" \
     --config "$WORK_DIR/weights/curriculum_medium.yaml" \
+    --no-download \
     --epochs "$EPOCHS" \
     --lr "$LEARNING_RATE" \
     --seed "$TRAIN_SEED" \

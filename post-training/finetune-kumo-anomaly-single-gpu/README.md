@@ -2,9 +2,13 @@
 
 Fine-tune NVIDIA's [Kumo-Anomaly](https://huggingface.co/nvidia/Kumo-Anomaly) diffusion model on the public [Kaggle multivariate time-series dataset](https://www.kaggle.com/datasets/drscarlat/time-series) for 10 epochs on one A10 GPU. The recipe runs the fine-tuning example from NVIDIA's [Kumo-TS repository](https://github.com/NVIDIA/Kumo-TS/tree/main/Kumo-Anomaly) at a pinned commit, inside that project's locked `uv` environment.
 
-Kumo-Anomaly learns what normal behavior looks like, so the recipe trains and validates on anomaly-free data only. The dataset has 11 numeric features and a 0/1 anomaly label for each row. The recipe splits the series in time order into a training part (the first 60%) and a validation part (the next 20%), then keeps the earliest 100-row blocks in each part that contain no labeled anomalies: 500 blocks (50,000 rows) for training and 100 blocks (10,000 rows) for validation. Labels only decide which blocks to keep; the model never sees them.
+Kumo-Anomaly learns what normal behavior looks like, so the recipe trains and validates on anomaly-free data only. The dataset has 11 numeric features and a 0/1 anomaly label for each row.
 
-The recipe reports the upstream training and validation losses, which don't measure anomaly-detection quality. The validation loss is stochastic, so it moves around from epoch to epoch, and the epoch with the lowest value becomes the best checkpoint. Workload execution takes about 3 minutes.
+The recipe splits the series in time order into three parts: the first 60% for training, the next 20% for validation, and the last 20% held out as a test set. This recipe does not use that test set. It is reserved for measuring detection performance before and after fine-tuning, which the upstream detection step covers (see Results below). Within the training and validation parts, the recipe scans the series in non-overlapping 100-row blocks and keeps only the blocks that contain no labeled anomalies. It keeps the earliest such blocks up to a fixed count: 500 blocks (50,000 rows) for training and 100 blocks (10,000 rows) for validation. Labels only decide which blocks to keep. The model never sees them.
+
+The recipe reports the upstream training and validation losses. The loss measures how accurately the model predicts the noise added to normal time-series data. A lower loss means better denoising. Better denoising does not establish better anomaly detection. That needs a separate evaluation on labeled normal and anomalous data, for example using average precision. This recipe does not run that evaluation. The upstream guide shows how to run anomaly detection with the trained checkpoint (see Results below).
+
+The validation loss is stochastic, so it changes from epoch to epoch. The epoch with the lowest validation loss becomes the best checkpoint. The workload takes about 3 minutes to run.
 
 ## Before you run
 
