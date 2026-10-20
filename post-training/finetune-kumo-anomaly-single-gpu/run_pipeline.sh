@@ -67,8 +67,23 @@ uv run --frozen --no-dev python examples/finetune_example.py \
 test -f "$WORK_DIR/checkpoints/final_finetuned_model.pth"
 cp -R "$WORK_DIR/checkpoints" "$volume_dir/"
 
-# Publish checkpoints, epoch losses and data provenance to MLflow. This step
-# only needs MLflow, which the AIR environment already provides.
+# Measure detection quality on the held-out test set (the last 20% of the series,
+# which training never sees). Scoring it with the base and fine-tuned checkpoints
+# shows the before/after effect of fine-tuning. This uses the upstream SDK and GPU,
+# so it runs in the locked uv environment.
+uv run --frozen --no-dev python "$CODE_SOURCE_PATH/evaluate_holdout.py" \
+    --source "${DATA_DIR:-$WORK_DIR/source}" \
+    --manifest "$WORK_DIR/data/manifest.json" \
+    --finetuned-model "$WORK_DIR/checkpoints/best_finetuned_model.pth" \
+    --finetuned-config "$WORK_DIR/checkpoints/finetune_config.yaml" \
+    --base-model "$WORK_DIR/weights/final_model.pth" \
+    --base-config "$WORK_DIR/weights/curriculum_medium.yaml" \
+    --eval-rows "$EVAL_ROWS" \
+    --output "$WORK_DIR/evaluation.json" \
+    2>&1 | tee "$WORK_DIR/evaluation.log"
+
+# Publish checkpoints, epoch losses, held-out metrics and data provenance to
+# MLflow. This step only needs MLflow, which the AIR environment already provides.
 python "$CODE_SOURCE_PATH/log_training.py"
-cp "$WORK_DIR/training_summary.json" "$volume_dir/"
-echo "Copied checkpoints and training summary to $volume_dir"
+cp "$WORK_DIR/training_summary.json" "$WORK_DIR/evaluation.json" "$volume_dir/"
+echo "Copied checkpoints, training summary and evaluation to $volume_dir"
